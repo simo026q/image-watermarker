@@ -13,17 +13,33 @@ internal static class WatermarkPlacementCalculator
         var sizeRatio = Math.Clamp(options.SizeRatio, 0f, 1f);
         var availableWidth = MathF.Max(0f, imageSize.Width - (margin * 2f));
         var availableHeight = MathF.Max(0f, imageSize.Height - (margin * 2f));
-        var imageAspectRatio = availableHeight == 0f ? watermarkAspectRatio : availableWidth / availableHeight;
+        var normalizedAspectRatio = watermarkAspectRatio <= 0f ? 1f : watermarkAspectRatio;
+        var targetLongSide = options.SizeHandling switch
+        {
+            // Keep the existing behavior so rotated images preserve the same apparent scale.
+            WatermarkSizeHandling.Relative => MathF.Min(availableWidth, availableHeight) * sizeRatio,
+            WatermarkSizeHandling.Width => availableWidth * sizeRatio,
+            _ => MathF.Min(availableWidth, availableHeight) * sizeRatio
+        };
 
-        var containWidth = watermarkAspectRatio >= imageAspectRatio
-            ? availableWidth
-            : availableHeight * watermarkAspectRatio;
-        var containHeight = watermarkAspectRatio >= imageAspectRatio
-            ? containWidth / watermarkAspectRatio
-            : availableHeight;
+        var finalWidth = normalizedAspectRatio >= 1f
+            ? targetLongSide
+            : targetLongSide * normalizedAspectRatio;
+        var finalHeight = normalizedAspectRatio >= 1f
+            ? finalWidth / normalizedAspectRatio
+            : targetLongSide;
 
-        var finalWidth = containWidth * sizeRatio;
-        var finalHeight = containHeight * sizeRatio;
+        if (finalWidth > availableWidth)
+        {
+            finalWidth = availableWidth;
+            finalHeight = finalWidth / normalizedAspectRatio;
+        }
+
+        if (finalHeight > availableHeight)
+        {
+            finalHeight = availableHeight;
+            finalWidth = finalHeight * normalizedAspectRatio;
+        }
 
         var x = options.Position switch
         {

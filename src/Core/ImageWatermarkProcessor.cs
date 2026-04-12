@@ -20,6 +20,7 @@ public sealed class ImageWatermarkProcessor : IImageWatermarkProcessor
         ArgumentNullException.ThrowIfNull(watermark);
 
         using var image = await Image.LoadAsync<Rgba32>(inputImage, cancellationToken);
+        image.Mutate(context => context.AutoOrient());
         using var overlay = await LoadAndResizeWatermarkAsync(watermarkImage, image.Size, watermark, cancellationToken);
 
         ApplyWatermark(image, overlay, watermark);
