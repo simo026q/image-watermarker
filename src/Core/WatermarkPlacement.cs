@@ -1,6 +1,6 @@
 namespace ImageWatermarker.Core;
 
-internal sealed record SvgWatermarkPlacement(
+internal sealed record WatermarkPlacement(
     int Width,
     int Height,
     int X,

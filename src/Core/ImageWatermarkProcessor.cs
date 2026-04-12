@@ -1,53 +1,62 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-
 namespace ImageWatermarker.Core;
 
 public sealed class ImageWatermarkProcessor : IImageWatermarkProcessor
 {
-    public async Task ApplySvgWatermarkAsync(
+    public async Task ApplyPngWatermarkAsync(
         Stream inputImage,
-        Stream watermarkSvg,
+        Stream watermarkImage,
         Stream outputImage,
-        SvgWatermarkOptions watermark,
+        WatermarkOptions watermark,
         ImageWriteOptions? writeOptions = null,
         string? outputFileName = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(inputImage);
-        ArgumentNullException.ThrowIfNull(watermarkSvg);
+        ArgumentNullException.ThrowIfNull(watermarkImage);
         ArgumentNullException.ThrowIfNull(outputImage);
         ArgumentNullException.ThrowIfNull(watermark);
 
         using var image = await Image.LoadAsync<Rgba32>(inputImage, cancellationToken);
+        using var overlay = await LoadAndResizeWatermarkAsync(watermarkImage, image.Size, watermark, cancellationToken);
 
-        ApplyWatermark(image, watermarkSvg, watermark);
+        ApplyWatermark(image, overlay, watermark);
 
         var encoder = ImageEncoderResolver.Resolve(writeOptions, outputFileName);
         await image.SaveAsync(outputImage, encoder, cancellationToken);
     }
 
-    private static void ApplyWatermark(Image<Rgba32> image, Stream watermarkSvg, SvgWatermarkOptions options)
+    private static async Task<Image<Rgba32>> LoadAndResizeWatermarkAsync(
+        Stream watermarkImage,
+        Size imageSize,
+        WatermarkOptions options,
+        CancellationToken cancellationToken)
     {
-        if (watermarkSvg.CanSeek)
+        if (watermarkImage.CanSeek)
         {
-            watermarkSvg.Position = 0;
+            watermarkImage.Position = 0;
         }
 
-        using var svgBuffer = new MemoryStream();
-        watermarkSvg.CopyTo(svgBuffer);
-        var svgBytes = svgBuffer.ToArray();
+        using var overlay = await Image.LoadAsync<Rgba32>(watermarkImage, cancellationToken);
+        var aspectRatio = overlay.Height == 0 ? 1f : (float)overlay.Width / overlay.Height;
+        var placement = WatermarkPlacementCalculator.Calculate(imageSize, aspectRatio, options);
 
-        using var aspectRatioStream = new MemoryStream(svgBytes, writable: false);
-        var aspectRatio = SvgRasterizer.GetAspectRatio(aspectRatioStream);
-        var placement = SvgWatermarkPlacementCalculator.Calculate(image.Size, aspectRatio, options);
+        overlay.Mutate(context => context.Resize(new ResizeOptions
+        {
+            Size = new Size(placement.Width, placement.Height),
+            Mode = ResizeMode.Stretch,
+            Sampler = KnownResamplers.Lanczos3
+        }));
 
-        using var rasterizeStream = new MemoryStream(svgBytes, writable: false);
-        var (overlayPng, _) = SvgRasterizer.RasterizePng(rasterizeStream, placement.Width, placement.Height);
+        return overlay.Clone();
+    }
 
-        using var overlayStream = new MemoryStream(overlayPng);
-        using var overlay = Image.Load<Rgba32>(overlayStream);
+    private static void ApplyWatermark(Image<Rgba32> image, Image<Rgba32> overlay, WatermarkOptions options)
+    {
+        var aspectRatio = overlay.Height == 0 ? 1f : (float)overlay.Width / overlay.Height;
+        var placement = WatermarkPlacementCalculator.Calculate(image.Size, aspectRatio, options);
 
         image.Mutate(context => context.DrawImage(
             overlay,

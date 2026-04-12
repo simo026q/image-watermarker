@@ -2,11 +2,11 @@ namespace ImageWatermarker.Core;
 
 public interface IImageWatermarkProcessor
 {
-    Task ApplySvgWatermarkAsync(
+    Task ApplyPngWatermarkAsync(
         Stream inputImage,
-        Stream watermarkSvg,
+        Stream watermarkImage,
         Stream outputImage,
-        SvgWatermarkOptions watermark,
+        WatermarkOptions watermark,
         ImageWriteOptions? writeOptions = null,
         string? outputFileName = null,
         CancellationToken cancellationToken = default);

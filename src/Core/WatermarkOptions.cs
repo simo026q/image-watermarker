@@ -1,6 +1,6 @@
 namespace ImageWatermarker.Core;
 
-public sealed class SvgWatermarkOptions
+public sealed class WatermarkOptions
 {
     public WatermarkPosition Position { get; init; } = WatermarkPosition.BottomRight;
     public float SizeRatio { get; init; } = 0.2f;

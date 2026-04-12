@@ -14,7 +14,7 @@ try
 
     var processor = new ImageWatermarkProcessor();
     var targets = ResolveTargets(invocation).ToList();
-    var watermarkSvgBytes = await File.ReadAllBytesAsync(invocation.WatermarkSvgPath);
+    var watermarkPngBytes = await File.ReadAllBytesAsync(invocation.WatermarkPngPath);
 
     if (targets.Count == 0)
     {
@@ -27,14 +27,14 @@ try
         Directory.CreateDirectory(Path.GetDirectoryName(target.OutputPath)!);
 
         await using var input = File.OpenRead(target.InputPath);
-        await using var watermarkSvg = new MemoryStream(watermarkSvgBytes, writable: false);
+        await using var watermarkImage = new MemoryStream(watermarkPngBytes, writable: false);
         await using var output = File.Create(target.OutputPath);
 
-        await processor.ApplySvgWatermarkAsync(
+        await processor.ApplyPngWatermarkAsync(
             input,
-            watermarkSvg,
+            watermarkImage,
             output,
-            new SvgWatermarkOptions
+            new WatermarkOptions
             {
                 Position = invocation.Position,
                 SizeRatio = invocation.SizeRatio,
@@ -93,7 +93,7 @@ static CliInvocation ParseArguments(IReadOnlyList<string> args)
                 return invocation;
             case "--watermark":
             case "-w":
-                invocation.WatermarkSvgPath = NextValue();
+                invocation.WatermarkPngPath = NextValue();
                 break;
             case "--position":
             case "-p":
@@ -131,14 +131,19 @@ static CliInvocation ParseArguments(IReadOnlyList<string> args)
     invocation.InputPath = positionals[0];
     invocation.OutputPath = positionals.Count > 1 ? positionals[1] : null;
 
-    if (string.IsNullOrWhiteSpace(invocation.WatermarkSvgPath))
+    if (string.IsNullOrWhiteSpace(invocation.WatermarkPngPath))
     {
-        throw new ArgumentException("A watermark SVG path is required. Use --watermark logo.svg.");
+        throw new ArgumentException("A watermark PNG path is required. Use --watermark logo.png.");
     }
 
-    if (!File.Exists(invocation.WatermarkSvgPath))
+    if (!File.Exists(invocation.WatermarkPngPath))
     {
-        throw new ArgumentException($"Watermark SVG file not found: {invocation.WatermarkSvgPath}");
+        throw new ArgumentException($"Watermark PNG file not found: {invocation.WatermarkPngPath}");
+    }
+
+    if (!string.Equals(Path.GetExtension(invocation.WatermarkPngPath), ".png", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new ArgumentException($"Watermark file must be a PNG image: {invocation.WatermarkPngPath}");
     }
 
     return invocation;
@@ -151,7 +156,7 @@ static CliInvocation PromptForInvocation()
     Console.WriteLine();
 
     var inputPath = PromptRequired("Input image or folder path");
-    var watermarkSvgPath = PromptRequired("Watermark SVG path");
+    var watermarkPngPath = PromptRequired("Watermark PNG path");
     var outputFormat = ParseFormat(Prompt("Output format", "png"));
     var defaultOutputPath = BuildDefaultOutputPath(inputPath, outputFormat);
     var outputPath = Prompt("Output path", defaultOutputPath);
@@ -166,7 +171,7 @@ static CliInvocation PromptForInvocation()
     {
         InputPath = inputPath,
         OutputPath = outputPath,
-        WatermarkSvgPath = watermarkSvgPath,
+        WatermarkPngPath = watermarkPngPath,
         Position = position,
         SizeRatio = sizeRatio,
         HorizontalPositionRatio = positionX,
@@ -269,13 +274,13 @@ static bool ParseBoolean(string value)
 static void WriteHelp()
 {
     Console.WriteLine("Usage:");
-    Console.WriteLine("  image-watermarker <input-file> [output-file] --watermark <watermark.svg> [options]");
-    Console.WriteLine("  image-watermarker <input-folder> [output-folder] --watermark <watermark.svg> [options]");
+    Console.WriteLine("  image-watermarker <input-file> [output-file] --watermark <watermark.png> [options]");
+    Console.WriteLine("  image-watermarker <input-folder> [output-folder] --watermark <watermark.png> [options]");
     Console.WriteLine();
     Console.WriteLine("If you run the tool without arguments, it starts in interactive mode.");
     Console.WriteLine();
     Console.WriteLine("Options:");
-    Console.WriteLine("  --watermark, -w      Path to the SVG watermark file");
+    Console.WriteLine("  --watermark, -w      Path to the PNG watermark file");
     Console.WriteLine("  --position, -p       top-left | top-center | top-right | middle-left | middle-center | middle-right | bottom-left | bottom-center | bottom-right");
     Console.WriteLine("  --size               Watermark size as 1-100 or 0.01-1");
     Console.WriteLine("  --position-x         Horizontal placement from 0 to 1");
@@ -286,9 +291,9 @@ static void WriteHelp()
     Console.WriteLine("  --help, -h           Show help");
     Console.WriteLine();
     Console.WriteLine("Examples:");
-    Console.WriteLine("  image-watermarker photo.jpg --watermark logo.svg");
-    Console.WriteLine("  image-watermarker photos branded --watermark logo.svg --recursive");
-    Console.WriteLine("  image-watermarker photo.jpg branded.jpg --watermark logo.svg --format jpeg --jpeg-quality 100");
+    Console.WriteLine("  image-watermarker photo.jpg --watermark logo.png");
+    Console.WriteLine("  image-watermarker photos branded --watermark logo.png --recursive");
+    Console.WriteLine("  image-watermarker photo.jpg branded.jpg --watermark logo.png --format jpeg --jpeg-quality 100");
 }
 
 static WatermarkPosition ParsePosition(string value)
@@ -392,7 +397,7 @@ internal sealed class CliInvocation
 
     public string? OutputPath { get; set; }
 
-    public string WatermarkSvgPath { get; set; } = string.Empty;
+    public string WatermarkPngPath { get; set; } = string.Empty;
 
     public WatermarkPosition Position { get; set; } = WatermarkPosition.BottomRight;
 

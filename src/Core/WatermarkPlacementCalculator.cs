@@ -2,12 +2,12 @@ using SixLabors.ImageSharp;
 
 namespace ImageWatermarker.Core;
 
-internal static class SvgWatermarkPlacementCalculator
+internal static class WatermarkPlacementCalculator
 {
-    public static SvgWatermarkPlacement Calculate(
+    public static WatermarkPlacement Calculate(
         Size imageSize,
         float watermarkAspectRatio,
-        SvgWatermarkOptions options)
+        WatermarkOptions options)
     {
         var margin = MathF.Max(8f, MathF.Min(imageSize.Width, imageSize.Height) * options.MarginRatio);
         var sizeRatio = Math.Clamp(options.SizeRatio, 0f, 1f);
@@ -52,7 +52,7 @@ internal static class SvgWatermarkPlacementCalculator
             y = margin + (verticalTravel * Math.Clamp(verticalPositionRatio, 0f, 1f));
         }
 
-        return new SvgWatermarkPlacement(
+        return new WatermarkPlacement(
             Math.Max(1, (int)MathF.Round(finalWidth)),
             Math.Max(1, (int)MathF.Round(finalHeight)),
             Math.Max(0, (int)MathF.Round(x)),
