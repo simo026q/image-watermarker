@@ -10,32 +10,47 @@ internal static class SvgWatermarkPlacementCalculator
         SvgWatermarkOptions options)
     {
         var margin = MathF.Max(8f, MathF.Min(imageSize.Width, imageSize.Height) * options.MarginRatio);
-        var maxWidth = MathF.Max(1f, imageSize.Width * options.MaxWidthRatio);
-        var maxHeight = MathF.Max(1f, imageSize.Height * options.MaxHeightRatio);
+        var sizeRatio = Math.Clamp(options.SizeRatio, 0f, 1f);
+        var availableWidth = MathF.Max(0f, imageSize.Width - (margin * 2f));
+        var availableHeight = MathF.Max(0f, imageSize.Height - (margin * 2f));
+        var imageAspectRatio = availableHeight == 0f ? watermarkAspectRatio : availableWidth / availableHeight;
 
-        var widthFromHeight = maxHeight * watermarkAspectRatio;
-        var finalWidth = MathF.Min(maxWidth, widthFromHeight);
-        var finalHeight = finalWidth / watermarkAspectRatio;
+        var containWidth = watermarkAspectRatio >= imageAspectRatio
+            ? availableWidth
+            : availableHeight * watermarkAspectRatio;
+        var containHeight = watermarkAspectRatio >= imageAspectRatio
+            ? containWidth / watermarkAspectRatio
+            : availableHeight;
 
-        if (finalHeight > maxHeight)
-        {
-            finalHeight = maxHeight;
-            finalWidth = finalHeight * watermarkAspectRatio;
-        }
+        var finalWidth = containWidth * sizeRatio;
+        var finalHeight = containHeight * sizeRatio;
 
         var x = options.Position switch
         {
-            WatermarkPosition.TopLeft or WatermarkPosition.BottomLeft => margin,
-            WatermarkPosition.TopRight or WatermarkPosition.BottomRight => imageSize.Width - finalWidth - margin,
+            WatermarkPosition.TopLeft or WatermarkPosition.MiddleLeft or WatermarkPosition.BottomLeft => margin,
+            WatermarkPosition.TopRight or WatermarkPosition.MiddleRight or WatermarkPosition.BottomRight => imageSize.Width - finalWidth - margin,
             _ => (imageSize.Width - finalWidth) / 2f
         };
 
         var y = options.Position switch
         {
-            WatermarkPosition.TopLeft or WatermarkPosition.TopRight => margin,
-            WatermarkPosition.BottomLeft or WatermarkPosition.BottomRight => imageSize.Height - finalHeight - margin,
+            WatermarkPosition.TopLeft or WatermarkPosition.TopCenter or WatermarkPosition.TopRight => margin,
+            WatermarkPosition.BottomLeft or WatermarkPosition.BottomCenter or WatermarkPosition.BottomRight => imageSize.Height - finalHeight - margin,
             _ => (imageSize.Height - finalHeight) / 2f
         };
+
+        var horizontalTravel = MathF.Max(0f, imageSize.Width - finalWidth - (margin * 2f));
+        var verticalTravel = MathF.Max(0f, imageSize.Height - finalHeight - (margin * 2f));
+
+        if (options.HorizontalPositionRatio is float horizontalPositionRatio)
+        {
+            x = margin + (horizontalTravel * Math.Clamp(horizontalPositionRatio, 0f, 1f));
+        }
+
+        if (options.VerticalPositionRatio is float verticalPositionRatio)
+        {
+            y = margin + (verticalTravel * Math.Clamp(verticalPositionRatio, 0f, 1f));
+        }
 
         return new SvgWatermarkPlacement(
             Math.Max(1, (int)MathF.Round(finalWidth)),

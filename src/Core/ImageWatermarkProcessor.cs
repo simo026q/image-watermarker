@@ -52,6 +52,6 @@ public sealed class ImageWatermarkProcessor : IImageWatermarkProcessor
         image.Mutate(context => context.DrawImage(
             overlay,
             new Point(placement.X, placement.Y),
-            Math.Clamp(options.Opacity, 0f, 1f)));
+            1f));
     }
 }

@@ -36,7 +36,10 @@ try
             output,
             new SvgWatermarkOptions
             {
-                Position = invocation.Position
+                Position = invocation.Position,
+                SizeRatio = invocation.SizeRatio,
+                HorizontalPositionRatio = invocation.HorizontalPositionRatio,
+                VerticalPositionRatio = invocation.VerticalPositionRatio
             },
             new ImageWriteOptions
             {
@@ -96,6 +99,15 @@ static CliInvocation ParseArguments(IReadOnlyList<string> args)
             case "-p":
                 invocation.Position = ParsePosition(NextValue());
                 break;
+            case "--position-x":
+                invocation.HorizontalPositionRatio = ParseRatio(NextValue(), current);
+                break;
+            case "--position-y":
+                invocation.VerticalPositionRatio = ParseRatio(NextValue(), current);
+                break;
+            case "--size":
+                invocation.SizeRatio = ParseSizeRatio(NextValue(), current);
+                break;
             case "--format":
                 invocation.OutputFormat = ParseFormat(NextValue());
                 break;
@@ -144,6 +156,9 @@ static CliInvocation PromptForInvocation()
     var defaultOutputPath = BuildDefaultOutputPath(inputPath, outputFormat);
     var outputPath = Prompt("Output path", defaultOutputPath);
     var position = ParsePosition(Prompt("Position", "bottom-right"));
+    var sizeRatio = ParseSizeRatio(Prompt("Size ratio in percent or decimal", "20"), "Size ratio");
+    var positionX = PromptOptionalRatio("Horizontal position ratio (0 left to 1 right)");
+    var positionY = PromptOptionalRatio("Vertical position ratio (0 top to 1 bottom)");
     var recursive = Directory.Exists(inputPath) && ParseBoolean(Prompt("Recursive folder scan", "yes"));
     var jpegQualityText = Prompt("JPEG quality", "100");
 
@@ -153,6 +168,9 @@ static CliInvocation PromptForInvocation()
         OutputPath = outputPath,
         WatermarkSvgPath = watermarkSvgPath,
         Position = position,
+        SizeRatio = sizeRatio,
+        HorizontalPositionRatio = positionX,
+        VerticalPositionRatio = positionY,
         OutputFormat = outputFormat,
         Recursive = recursive,
         JpegQuality = ParseJpegQuality(jpegQualityText)
@@ -231,6 +249,13 @@ static string Prompt(string label, string defaultValue)
     return string.IsNullOrWhiteSpace(value) ? defaultValue : value;
 }
 
+static float? PromptOptionalRatio(string label)
+{
+    Console.Write($"{label} [preset]: ");
+    var value = Console.ReadLine()?.Trim();
+    return string.IsNullOrWhiteSpace(value) ? null : ParseRatio(value, label);
+}
+
 static bool ParseBoolean(string value)
 {
     return value.Trim().ToLowerInvariant() switch
@@ -251,7 +276,10 @@ static void WriteHelp()
     Console.WriteLine();
     Console.WriteLine("Options:");
     Console.WriteLine("  --watermark, -w      Path to the SVG watermark file");
-    Console.WriteLine("  --position, -p       top-left | top-right | bottom-left | bottom-right | center");
+    Console.WriteLine("  --position, -p       top-left | top-center | top-right | middle-left | middle-center | middle-right | bottom-left | bottom-center | bottom-right");
+    Console.WriteLine("  --size               Watermark size as 1-100 or 0.01-1");
+    Console.WriteLine("  --position-x         Horizontal placement from 0 to 1");
+    Console.WriteLine("  --position-y         Vertical placement from 0 to 1");
     Console.WriteLine("  --format             png | jpeg | bmp | gif | auto");
     Console.WriteLine("  --jpeg-quality       1-100, used only for JPEG output");
     Console.WriteLine("  --recursive, -r      Scan subfolders when input is a folder");
@@ -268,12 +296,46 @@ static WatermarkPosition ParsePosition(string value)
     return value.Trim().ToLowerInvariant() switch
     {
         "top-left" => WatermarkPosition.TopLeft,
+        "top-center" => WatermarkPosition.TopCenter,
         "top-right" => WatermarkPosition.TopRight,
+        "middle-left" => WatermarkPosition.MiddleLeft,
+        "middle-center" or "center" => WatermarkPosition.MiddleCenter,
+        "middle-right" => WatermarkPosition.MiddleRight,
         "bottom-left" => WatermarkPosition.BottomLeft,
+        "bottom-center" => WatermarkPosition.BottomCenter,
         "bottom-right" => WatermarkPosition.BottomRight,
-        "center" => WatermarkPosition.Center,
         _ => throw new ArgumentException($"Unsupported watermark position: {value}")
     };
+}
+
+static float ParseRatio(string value, string optionName)
+{
+    if (!float.TryParse(value, out var ratio) || ratio is < 0f or > 1f)
+    {
+        throw new ArgumentException($"{optionName} must be a number between 0 and 1.");
+    }
+
+    return ratio;
+}
+
+static float ParseSizeRatio(string value, string optionName)
+{
+    if (!float.TryParse(value, out var sizeRatio))
+    {
+        throw new ArgumentException($"{optionName} must be a number between 1 and 100 or 0.01 and 1.");
+    }
+
+    if (sizeRatio is > 1f and <= 100f)
+    {
+        return sizeRatio / 100f;
+    }
+
+    if (sizeRatio is >= 0.01f and <= 1f)
+    {
+        return sizeRatio;
+    }
+
+    throw new ArgumentException($"{optionName} must be a number between 1 and 100 or 0.01 and 1.");
 }
 
 static ImageOutputFormat ParseFormat(string value)
@@ -333,6 +395,12 @@ internal sealed class CliInvocation
     public string WatermarkSvgPath { get; set; } = string.Empty;
 
     public WatermarkPosition Position { get; set; } = WatermarkPosition.BottomRight;
+
+    public float SizeRatio { get; set; } = 0.2f;
+
+    public float? HorizontalPositionRatio { get; set; }
+
+    public float? VerticalPositionRatio { get; set; }
 
     public ImageOutputFormat OutputFormat { get; set; } = ImageOutputFormat.Auto;
 
