@@ -57,7 +57,8 @@ try
             new ImageWriteOptions
             {
                 OutputFormat = invocation.OutputFormat,
-                JpegQuality = invocation.JpegQuality
+                JpegQuality = invocation.JpegQuality,
+                MaxLongSidePixels = ResolveMaxLongSidePixels(invocation.DownscalePreset)
             },
             target.OutputPath);
 
@@ -126,6 +127,9 @@ static CliInvocation ParseArguments(IReadOnlyList<string> args)
                 break;
             case "--format":
                 invocation.OutputFormat = ParseFormat(NextValue());
+                break;
+            case "--downscale":
+                invocation.DownscalePreset = ParseDownscalePreset(NextValue());
                 break;
             case "--jpeg-quality":
                 invocation.JpegQuality = ParseJpegQuality(NextValue());
@@ -205,6 +209,7 @@ static CliInvocation PromptForInvocation()
     var sizeRatio = ParseSizeRatio(Prompt("Size ratio in percent or decimal", "20"), "Size ratio");
     var positionX = PromptOptionalRatio("Horizontal position ratio (0 left to 1 right)");
     var positionY = PromptOptionalRatio("Vertical position ratio (0 top to 1 bottom)");
+    var downscalePreset = ParseDownscalePreset(Prompt("Downscale preset", "none"));
     var recursive = isDirectoryInput && ParseBoolean(Prompt("Recursive folder scan", "yes"));
     var jpegQualityText = Prompt("JPEG quality", "100");
 
@@ -218,6 +223,7 @@ static CliInvocation PromptForInvocation()
         SizeRatio = sizeRatio,
         HorizontalPositionRatio = positionX,
         VerticalPositionRatio = positionY,
+        DownscalePreset = downscalePreset,
         OutputFormat = outputFormat,
         OutputDirectory = outputDirectory,
         OutputSuffix = outputSuffix,
@@ -341,6 +347,7 @@ static void WriteHelp()
     Console.WriteLine("  --size               Watermark size as 1-100 or 0.01-1");
     Console.WriteLine("  --position-x         Horizontal placement from 0 to 1");
     Console.WriteLine("  --position-y         Vertical placement from 0 to 1");
+    Console.WriteLine("  --downscale          none | socials (max long side 2048px)");
     Console.WriteLine("  --format             png | jpeg | bmp | gif | auto");
     Console.WriteLine("  --jpeg-quality       1-100, used only for JPEG output");
     Console.WriteLine("  --output-dir         Directory to write generated files into");
@@ -352,6 +359,7 @@ static void WriteHelp()
     Console.WriteLine("Examples:");
     Console.WriteLine("  image-watermarker photo.jpg --watermark logo.png");
     Console.WriteLine("  image-watermarker photo.jpg --watermark logo.png --size-handling width --size 35");
+    Console.WriteLine("  image-watermarker photo.jpg --watermark logo.png --downscale socials");
     Console.WriteLine("  image-watermarker photo.jpg --watermark logo.png --output-dir branded");
     Console.WriteLine("  image-watermarker photos --watermark logo.png --recursive");
     Console.WriteLine("  image-watermarker photo.jpg branded.jpg --watermark logo.png --format jpeg --jpeg-quality 100");
@@ -427,6 +435,16 @@ static ImageOutputFormat ParseFormat(string value)
     };
 }
 
+static ImageDownscalePreset ParseDownscalePreset(string value)
+{
+    return value.Trim().ToLowerInvariant() switch
+    {
+        "none" => ImageDownscalePreset.None,
+        "socials" => ImageDownscalePreset.Socials,
+        _ => throw new ArgumentException($"Unsupported downscale preset: {value}")
+    };
+}
+
 static int ParseJpegQuality(string value)
 {
     if (!int.TryParse(value, out var quality) || quality is < 1 or > 100)
@@ -435,6 +453,16 @@ static int ParseJpegQuality(string value)
     }
 
     return quality;
+}
+
+static int? ResolveMaxLongSidePixels(ImageDownscalePreset preset)
+{
+    return preset switch
+    {
+        ImageDownscalePreset.None => null,
+        ImageDownscalePreset.Socials => 2048,
+        _ => null
+    };
 }
 
 static string ParseOutputSuffix(string value)
@@ -601,6 +629,8 @@ internal sealed class CliInvocation
     public float? VerticalPositionRatio { get; set; }
 
     public ImageOutputFormat OutputFormat { get; set; } = ImageOutputFormat.Auto;
+
+    public ImageDownscalePreset DownscalePreset { get; set; } = ImageDownscalePreset.None;
 
     public bool Recursive { get; set; }
 

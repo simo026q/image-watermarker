@@ -1,6 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+
 namespace ImageWatermarker.Core;
 
 public sealed class ImageWatermarkProcessor : IImageWatermarkProcessor
@@ -21,6 +22,7 @@ public sealed class ImageWatermarkProcessor : IImageWatermarkProcessor
 
         using var image = await Image.LoadAsync<Rgba32>(inputImage, cancellationToken);
         image.Mutate(context => context.AutoOrient());
+        ResizeForOutput(image, writeOptions);
         using var overlay = await LoadAndResizeWatermarkAsync(watermarkImage, image.Size, watermark, cancellationToken);
 
         ApplyWatermark(image, overlay, watermark);
@@ -63,5 +65,31 @@ public sealed class ImageWatermarkProcessor : IImageWatermarkProcessor
             overlay,
             new Point(placement.X, placement.Y),
             1f));
+    }
+
+    private static void ResizeForOutput(Image<Rgba32> image, ImageWriteOptions? writeOptions)
+    {
+        var maxLongSidePixels = writeOptions?.MaxLongSidePixels;
+        if (maxLongSidePixels is null or <= 0)
+        {
+            return;
+        }
+
+        var currentLongSide = Math.Max(image.Width, image.Height);
+        if (currentLongSide <= maxLongSidePixels.Value)
+        {
+            return;
+        }
+
+        var scale = (float)maxLongSidePixels.Value / currentLongSide;
+        var targetWidth = Math.Max(1, (int)MathF.Round(image.Width * scale));
+        var targetHeight = Math.Max(1, (int)MathF.Round(image.Height * scale));
+
+        image.Mutate(context => context.Resize(new ResizeOptions
+        {
+            Size = new Size(targetWidth, targetHeight),
+            Mode = ResizeMode.Stretch,
+            Sampler = KnownResamplers.Lanczos3
+        }));
     }
 }
